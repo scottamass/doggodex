@@ -1,11 +1,15 @@
 # app.py
+from datetime import timedelta
 from flask import Flask, render_template, redirect, request, session, url_for, jsonify
 from flask_login import LoginManager, current_user, login_user, login_required, logout_user, UserMixin
 from functools import wraps
+
+from supabase import AuthApiError
 from supabase_client import supabase
 import os
 
 app = Flask(__name__)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 app.secret_key = os.getenv("SECRET_KEY", "default_secret_key")
 
 # Setup Flask-Login
@@ -18,16 +22,38 @@ class User(UserMixin):
     def __init__(self, id, uid):
         self.id = id
         self.uid = uid
+       
+
+# @login_manager.user_loader
+# def load_user(user_id):
+#     # print(f'-------{user_id}---------')
+#     print(f'-------{user_id}---------')
+#     user = supabase.auth.get_user(user_id)
+#     print(user)
+#     if user:
+#         return User(id=user,uid=user.user.id)
+#     return None
+
 
 @login_manager.user_loader
 def load_user(user_id):
-    print(f'-------{user_id}---------')
-    user = supabase.auth.get_user(user_id)
-    print(user)
-    if user:
-        return User(id=user_id,uid=user.user.id)
-    return None
+    try:
+        user = supabase.auth.get_user(user_id)
+    except AuthApiError as e:
+        if "token is expired" in str(e):
+            # Handle expired token - try refreshing
+            try:
 
+                refresh_response = supabase.auth.refresh_session(session['refresh'])
+                print(refresh_response)
+                new_access_token = refresh_response.session.access_token
+                user = supabase.auth.get_user(new_access_token)
+            except Exception as refresh_error:
+                print("Token refresh failed:", refresh_error)
+                logout_user()
+        else:
+            print("AuthApiError:", e)
+    return User(user.sid, user.user.id) if user else None
 
 # Decorator to restrict access to protected pages
 # def login_required(f):
@@ -41,6 +67,8 @@ def load_user(user_id):
 # Public Homepage
 @app.route("/")
 def home():
+    if session:
+        print(session['refresh'])
     return render_template("home.html")
 
 # Login Page
@@ -74,7 +102,9 @@ def callback():
         jwt = res.session.access_token
         user = supabase.auth.get_user(res.session.access_token)
         print(user)
-        # session["supabase_token"] = res.session.access_token
+        refresh = res.session.refresh_token
+        session['refresh']=refresh
+        session.permanent=True
         user = User(jwt,user.user.id)
         login_user(user)
 
@@ -107,6 +137,9 @@ def login():
     try:
         res = supabase.auth.sign_in_with_password({"email": email, "password": password})
         jwt = res.session.access_token
+        refresh = res.session.refresh_token
+        session['refresh']=refresh
+        session.permanent=True
         user = res.user.id
 
         user = User(jwt,user)
