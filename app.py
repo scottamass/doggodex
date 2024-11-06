@@ -39,21 +39,27 @@ class User(UserMixin):
 def load_user(user_id):
     try:
         user = supabase.auth.get_user(user_id)
+        print('working')
+        return User(user_id, user.user.id) if user else None
     except AuthApiError as e:
+        print(e)
         if "token is expired" in str(e):
             # Handle expired token - try refreshing
             try:
-
+                print(f'refreshing Token for: ')
                 refresh_response = supabase.auth.refresh_session(session['refresh'])
-                print(refresh_response)
+                # print(refresh_response)
                 new_access_token = refresh_response.session.access_token
+                print(new_access_token)
                 user = supabase.auth.get_user(new_access_token)
+                session['_user_id']=new_access_token
+                session['refresh']=refresh_response.session.refresh_token
+                return User(new_access_token, user.user.id) if user else None
             except Exception as refresh_error:
                 print("Token refresh failed:", refresh_error)
                 logout_user()
         else:
             print("AuthApiError:", e)
-    return User(user.sid, user.user.id) if user else None
 
 # Decorator to restrict access to protected pages
 # def login_required(f):
@@ -93,15 +99,15 @@ def signin_with_github():
 @app.route("/callback")
 def callback():
     code = request.args.get("code")
-    print(code)
+    
     next_page = request.args.get("next", "/protected")
 
     if code:
         res = supabase.auth.exchange_code_for_session({"auth_code": code})
-        print(res.session.access_token)
+        
         jwt = res.session.access_token
         user = supabase.auth.get_user(res.session.access_token)
-        print(user)
+      
         refresh = res.session.refresh_token
         session['refresh']=refresh
         session.permanent=True
