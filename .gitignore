@@ -1,0 +1,4 @@
+.env
+Pipfile
+__pycache__/flask_storage.cpython-311.pyc
+__pycache__/supabase_client.cpython-311.pyc
