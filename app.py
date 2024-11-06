@@ -5,9 +5,21 @@ from flask_login import LoginManager, current_user, login_user, login_required, 
 from functools import wraps
 
 from supabase import AuthApiError
+import torch
 from supabase_client import supabase
 import os
+from transformers import ViTForImageClassification, ViTImageProcessor
+import torch
+from PIL import Image
+import io
+import base64
+import torch.nn.functional as F
+# Load the model and processor
+device = "cuda" if torch.cuda.is_available() else "cpu"
+from transformers import AutoImageProcessor, AutoModelForImageClassification
 
+processor = AutoImageProcessor.from_pretrained("jhoppanne/Dogs-Breed-Image-Classification-V2")
+model = AutoModelForImageClassification.from_pretrained("jhoppanne/Dogs-Breed-Image-Classification-V2")
 app = Flask(__name__)
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 app.secret_key = os.getenv("SECRET_KEY", "default_secret_key")
@@ -76,7 +88,9 @@ def home():
     if session:
         print(session['refresh'])
     return render_template("home.html")
-
+@app.route('/camera')
+def camera():
+    return render_template('camera.html')
 # Login Page
 @app.route("/login")
 def login_page():
@@ -171,6 +185,41 @@ def logout():
     supabase.auth.sign_out()
 
     return redirect(url_for("home"))
+
+@app.route('/capture', methods=['POST'])
+def capture():
+    data = request.json.get('image_data')
+    if data:
+        # Decode the Base64 image data
+        image_data = base64.b64decode(data)
+        image = Image.open(io.BytesIO(image_data)).convert("RGB")
+
+        # Preprocess the image and make a prediction
+        inputs = processor(images=image, return_tensors='pt').to(device)
+        outputs = model(**inputs)
+
+        # Calculate confidence level
+        probabilities = F.softmax(outputs.logits, dim=-1)
+        confidence, predicted_id = torch.max(probabilities, dim=-1)
+        predicted_pokemon = model.config.id2label[predicted_id.item()]
+        confidence_percentage = confidence.item() * 100
+
+        # Print the predicted Pokémon and confidence level
+        print(f"Predicted Pokémon: {predicted_pokemon}, Confidence: {confidence_percentage:.2f}%")
+        
+        # Conditional response based on confidence level
+        if confidence_percentage < 10:
+            return jsonify({
+                "predicted_pokemon": 'I am unable to find a doggo',
+                "confidence": confidence_percentage
+            })
+        else:
+            return jsonify({
+                "predicted_pokemon": predicted_pokemon,
+                "confidence": confidence_percentage
+            })
+    
+    return jsonify({"error": "No image data received"}), 400
 
 if __name__ == "__main__":
     app.run(debug=True)

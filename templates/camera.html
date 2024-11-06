@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en" class="h-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+        crossorigin="anonymous"/>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <title>Camera Capture</title>
+</head>
+<body class="d-flex flex-column h-100">
+    <div class="container-fluid d-flex flex-column align-items-center" style="height: 2000px;">
+        <h1 class="text-center">Take a Picture</h1>
+        <div class="video-container">
+            <video class="round" id="video" autoplay playsinline></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+  
+        </div>
+    </div>
+    <!-- <footer id="footer" class="footer mt-auto py-3 bg-light text-center">
+        <div>
+            <a href="/" class="btn btn-link">Back</a>
+        </div>
+        <button id="capture-btn" class="btn btn-dark mx-2">Capture</button>
+        <button id="switch-camera-btn" class="btn btn-secondary mx-2">Switch Camera</button>
+    </footer> -->
+    <footer id="footer" class="photo-footer d-flex">
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <div class="d-flex justify-content-between align-items-end">
+            <a href="/" class="nav-item">
+                <i class="bi bi-chevron-left"></i>
+                <span class="nav-label">back</span>
+            </a>
+         
+            <a href="#" class="nav-item">
+                <div class="scan-button" id="capture-btn">
+                    <i class="bi bi-plus-lg"></i>
+                </div>
+                <span class="nav-label">Scan</span>
+            </a>
+            <div class="nav-item" style="width: 25px;"></div>
+        </div>
+
+        <!-- Empty Space for Alignment on the Right Side -->
+        </div>
+    </nav>
+    </footer>
+    
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureBtn = document.getElementById('capture-btn');
+        const switchCameraBtn = document.getElementById('switch-camera-btn');
+        
+        let currentFacingMode = 'user'; // Start with the front camera
+        
+        // Function to start the camera with the specified facing mode
+        function startCamera(facingMode) {
+            navigator.mediaDevices.getUserMedia({
+                video: { facingMode: facingMode }
+            })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(error => {
+                console.error("Camera error:", error);
+                alert("Camera access is required to display the preview.");
+            });
+        }
+        
+        // Initialize the camera
+        startCamera(currentFacingMode);
+        
+        // Capture image and send as base64
+        captureBtn.addEventListener('click', () => {
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const base64Image = canvas.toDataURL('image/png').split(',')[1]; // Remove "data:image/png;base64,"
+            
+            fetch('/capture', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_data: base64Image })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.predicted_pokemon) {
+                    alert("Predicted Pokémon: " + data.predicted_pokemon);
+                } else {
+                    alert("Error: " + data.error);
+                }
+            })
+            .catch(error => console.error("Capture error:", error));
+        });
+        
+        // Switch camera
+        switchCameraBtn.addEventListener('click', () => {
+            currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user'; // Toggle camera
+            startCamera(currentFacingMode); // Restart camera with new facing mode
+        });
+    </script>
+    <style>
+        .video-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 0.75rem 1rem;
+            border-top-left-radius: 20px;
+            border-top-right-radius: 20px;
+            box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-item {
+            text-align: center;
+            color: #6c757d;
+            text-decoration: none;
+            font-size: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .nav-item:hover {
+            color: #0d6efd;
+        }
+
+        .nav-label {
+            font-size: 0.75rem;
+            margin-top: 2px;
+        }
+
+        .scan-button {
+            width: 60px;
+            height: 60px;
+            background: #0dcaf0;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-top: -40px;
+            transition: transform 0.2s;
+        }
+
+        .scan-button:hover {
+            transform: scale(1.05);
+            background: #0bb5d9;
+        }
+
+        .scan-button i {
+            color: white;
+            font-size: 1.5rem;
+        }
+        .round {
+            border-radius: 50%;
+            border: 5px solid #333; /* Add a visible border */
+            width: 300px; /* Set a specific size */
+            height: 300px;
+            object-fit: cover; /* Ensure the video fills the circle */
+        }
+        #footer {
+            position:fixed;
+            left:0;right:0;bottom:0;
+            height:60px;
+            background:white;
+            backdrop-filter: blur(10px);
+            border-top:1px solid rgba(255,255,255,0.5);
+            box-shadow: 0px -5px 10px rgba(0,0,0,0.1), 0px -10px 20px rgba(0,0,0,0.1);
+            font-size:10px;
+        }      
+        .photo-footer {
+            border:none;
+            background:#37424E;
+            box-shadow:none;
+          }
+          .camera-button {
+            transition: filter 0.2s;
+          }
+          .buttonPressed {
+            /* filter: invert(1); */
+            /* desaturate */
+            /* filter: grayscale(100%); */
+            /* increase saturation */
+            filter: saturate(200%);
+            
+          }
+          .loadingContent {
+            filter: grayscale(100%);
+          }
+        
+        
+        .photo-footer-bg {
+          position:fixed;
+          left:0;right:0;bottom:0;
+          top:0;
+          z-index:-1;
+          background:#424B58;
+          background-image:url('./imgs/camera-bg.jpg');
+          background-size:cover;
+          background-position:center;
+          
+        }
+            
+    </style>
+</body>
+</html>
